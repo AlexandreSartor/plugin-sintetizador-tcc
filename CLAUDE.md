@@ -10,6 +10,17 @@ e CI/CD para plugins de áudio VST3**. Por isso a arquitetura precisa ser testá
 
 - **Passo 1 concluído**: o build com CMake funciona (`cmake -B build` + `cmake --build build`), gera o
   `tapSynth.vst3`, e o `ctest` passa (2 testes de fumaça em `tests/SmokeTests.cpp`). Nenhum arquivo de `Source/` foi movido.
+- **Passo 3 em andamento: `Data/OscData` migrado** para o alvo `tapsynth_core` (STATIC, aponta para `Source/Data/OscData.cpp`
+  sem mover). Includes trocados para `<juce_dsp/juce_dsp.h>` / `<juce_audio_basics/juce_audio_basics.h>`. O `ctest` passa
+  com 16 testes (2 de fumaça + 14 em `tests/dsp/OscDataTests.cpp`, dos quais 5 `Known_` que afirmam bugs atuais, itens 7, 14,
+  15 e 16). Falta: teste manual no Reaper e build do Projucer no VS2022. Próximo arquivo: a definir (`SynthSound.h` ou outro `Data/*`).
+- **Como o `tapsynth_core` usa o JUCE:** só cabeçalhos e definições dos módulos, via
+  `$<TARGET_PROPERTY:juce_xxx,INTERFACE_INCLUDE_DIRECTORIES>` / `INTERFACE_COMPILE_DEFINITIONS` (juce_core, juce_audio_basics,
+  juce_audio_formats, juce_dsp). O código dos módulos é compilado no plugin e no `tapsynth_tests`, que linkam os `juce::` por conta
+  própria. **Não** use `target_link_libraries(tapsynth_core ... juce::juce_dsp)` nem `$<COMPILE_ONLY:...>`: os dois puxam os
+  `INTERFACE_SOURCES` (`juce_core.cpp`, `juce_dsp.cpp`, ...) para dentro da biblioteca e o JUCE fica duplicado no plugin.
+  Conferir com `lib /list build\tapsynth_core.lib` (só devem aparecer `.obj` de `Source/`). As definições do plugin
+  (`JUCE_WEB_BROWSER=0` etc.) não chegam ao core; reavaliar quando o `SynthVoice` migrar.
 - **O projeto Projucer continua sendo o build principal do dia a dia** (`tapSynth.jucer`, `Builds/`, `JuceLibraryCode/`,
   `#include <JuceHeader.h>`). Mantenha o `.jucer` até a migração para CMake estar completa. O projeto do Visual Studio
   gerado pelo Projucer **não deve** conter nada de `tests/` (o `gtest` só existe no build do CMake; o Projucer
@@ -50,6 +61,8 @@ Source/
 tests/
   CMakeLists.txt      GoogleTest via FetchContent. Começa com include(FetchContent).
   SmokeTests.cpp      testes de fumaça (hoje só provam que a infraestrutura funciona)
+  dsp/OscDataTests.cpp  caracterização do OscData (inclui testes Known_ de bugs conhecidos)
+docs/progresso.md     diário de decisões e resultados de teste (material do TCC)
 build/                saída do CMake (ignorada pelo git)
 ```
 
@@ -175,6 +188,15 @@ O plugin sai em `build/tapSynth_artefacts/Debug/VST3/`. Se o `CL.exe` não for e
 13. Avisos de compilação conhecidos: `C4996` (construtor antigo de `AudioParameterFloat` e `juce::Font`), `C4100` (parâmetros
     não usados), `C4458` (variável oculta o membro da classe, em `OscData`, `FilterData`, `PluginEditor`),
     `C4244` (conversão float para int em `PluginProcessor`/`OscData`). Tratar depois, com testes cobrindo o código.
+14. `OscData::renderNextBlock` ignora o FM: chama só `process()` e `gain.process()`, nunca avança o `fmOsc`, então o
+    `fmModulator` fica parado. Hoje é código morto (o `SynthVoice` usa `processNextSample`), mas diverge dele.
+    Teste: `Known_RenderNextBlockIgnoresFm`.
+15. `OscData::setFreq`/`setOscPitch`/`setFmOsc` chamam `setFrequency` sem `force`, e o `juce::dsp::Oscillator` suaviza a
+    frequência por 50 ms: toda nota nova desliza a partir da frequência da nota anterior (portamento implícito).
+    Decidir se é intencional. Teste: `Known_NoteChangeGlidesFor50ms`.
+16. FM quantizado em semitons com arredondamento para baixo: `getMidiNoteInHertz(int)` recebe `nota + pitch + fmModulator`
+    (`float`) e trunca. Com modulador em (-1, 0) a nota cai um semitom; em [0, 1) não muda nada. É a origem do `C4244`
+    no `OscData` (item 13). Teste: `Known_FmQuantizedToSemitonesRoundingDown`.
 
 ## Testes planejados
 

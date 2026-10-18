@@ -11,7 +11,8 @@ set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
 add_executable(tapsynth_tests
-    SmokeTests.cpp)
+    SmokeTests.cpp
+    dsp/OscDataTests.cpp)
 
 # tapsynth_core so traz cabecalhos dos modulos JUCE; o codigo deles
 # (juce_core, juce_audio_basics, juce_dsp) e compilado aqui. Sem GUI, sem DAW.
