@@ -28,6 +28,29 @@ else()
 endif()
 
 # ---------------------------------------------------------------------------
+# Core (sem GUI): DSP e logica testavel sem DAW.
+# Os modulos JUCE entram so como cabecalhos e definicoes; o codigo deles e
+# compilado uma unica vez em cada executavel final (plugin e testes), evitando
+# duas copias do JUCE no mesmo binario.
+# Nao da para usar target_link_libraries(... juce::juce_dsp) nem $<COMPILE_ONLY:...>:
+# os dois levam junto os INTERFACE_SOURCES (juce_core.cpp, juce_dsp.cpp, ...).
+# juce_audio_formats aparece porque e dependencia de cabecalho do juce_dsp.
+# ---------------------------------------------------------------------------
+add_library(tapsynth_core STATIC
+    Source/Data/OscData.cpp)
+
+target_include_directories(tapsynth_core PUBLIC Source)
+
+foreach(module IN ITEMS juce_core juce_audio_basics juce_audio_formats juce_dsp)
+    target_include_directories(tapsynth_core PUBLIC
+        $<TARGET_PROPERTY:${module},INTERFACE_INCLUDE_DIRECTORIES>)
+    target_compile_definitions(tapsynth_core PUBLIC
+        $<TARGET_PROPERTY:${module},INTERFACE_COMPILE_DEFINITIONS>)
+endforeach()
+
+target_link_libraries(tapsynth_core PRIVATE juce::juce_recommended_config_flags)
+
+# ---------------------------------------------------------------------------
 # Plugin (equivalente ao tapSynth.jucer: synth com entrada MIDI, VST3 + Standalone)
 # ---------------------------------------------------------------------------
 juce_add_plugin(tapSynth
@@ -50,7 +73,6 @@ target_sources(tapSynth PRIVATE
     Source/Data/AdsrData.cpp
     Source/Data/FilterData.cpp
     Source/Data/MeterData.cpp
-    Source/Data/OscData.cpp
     Source/UI/AdsrComponent.cpp
     Source/UI/Assets.cpp
     Source/UI/CustomComponent.cpp
@@ -72,6 +94,7 @@ target_compile_definitions(tapSynth PUBLIC
 
 target_link_libraries(tapSynth
     PRIVATE
+        tapsynth_core
         juce::juce_audio_basics
         juce::juce_audio_devices
         juce::juce_audio_formats
