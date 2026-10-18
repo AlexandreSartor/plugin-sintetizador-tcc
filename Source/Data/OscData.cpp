@@ -9,6 +9,7 @@
 */
 
 #include "OscData.h"
+#include <juce_audio_basics/juce_audio_basics.h>
 
 void OscData::prepareToPlay (double sampleRate, int samplesPerBlock, int outputChannels)
 {
